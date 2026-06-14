@@ -10,6 +10,7 @@ const TARGET_GROUP_NAME = 'Daily Leetcode';
 const client = new Client({
     authStrategy: new LocalAuth(),
     authTimeoutMs: 120000, // 2 minutes to handle slow loading
+    webVersionCache: { type: 'none' }, // Prevents WhatsApp from reloading the page and destroying the execution context
     puppeteer: {
         headless: true,
         protocolTimeout: 0, // Disable timeout to avoid "Runtime.callFunctionOn timed out" on slow AWS instances
