@@ -9,8 +9,10 @@ const TARGET_GROUP_NAME = 'Daily Leetcode';
 // Initialize the WhatsApp Client with AWS-optimized settings
 const client = new Client({
     authStrategy: new LocalAuth(),
+    authTimeoutMs: 120000, // 2 minutes to handle slow loading
     puppeteer: {
         headless: true,
+        protocolTimeout: 0, // Disable timeout to avoid "Runtime.callFunctionOn timed out" on slow AWS instances
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
