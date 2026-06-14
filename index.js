@@ -3,13 +3,24 @@ const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
 const axios = require('axios');
 
-// Replace this with your exact WhatsApp group name
-const TARGET_GROUP_NAME = 'Daily Leetcode'; 
+// ⚠️ IMPORTANT: Replace this with your exact WhatsApp group name
+const TARGET_GROUP_NAME = 'Daily Leetcode';
 
-// Initialize the WhatsApp Client
-// LocalAuth saves your session so you don't have to scan the QR code every time you restart the script.
+// Initialize the WhatsApp Client with AWS-optimized settings
 const client = new Client({
     authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', // Critical for AWS t2/t3 instances (1GB RAM)
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
+    }
 });
 
 // Generate and display the QR code in the terminal
@@ -18,9 +29,15 @@ client.on('qr', (qr) => {
     console.log('Scan the QR code above with your WhatsApp app to log in.');
 });
 
+// Let us know the scan worked while we wait for the background sync
+client.on('authenticated', () => {
+    console.log('📱 QR Scanned! Authentication successful. Syncing chats now... (Please wait)');
+});
+
+// The main loop once the bot is fully logged in and synced
 client.on('ready', async () => {
     console.log('✅ WhatsApp Client is ready!');
-    
+
     // Fetch all chats to find your specific group
     const chats = await client.getChats();
     const myGroup = chats.find((chat) => chat.isGroup && chat.name === TARGET_GROUP_NAME);
@@ -31,18 +48,18 @@ client.on('ready', async () => {
     }
     console.log(`✅ Found group: ${myGroup.name}`);
 
-    // Schedule the task - Currently set to run at 8:00 AM every day
-    // The format is: minute hour dayOfMonth month dayOfWeek
+    // Schedule the task - Currently set to run at 8:00 AM server time every day
+    // Format: minute hour dayOfMonth month dayOfWeek
     cron.schedule('0 8 * * *', async () => {
         console.log('Fetching daily LeetCode question...');
         const questionMessage = await fetchDailyLeetCode();
-        
+
         if (questionMessage) {
             await client.sendMessage(myGroup.id._serialized, questionMessage);
             console.log('✅ Daily question sent to group!');
         }
     });
-    
+
     console.log('⏳ Bot is now running and waiting for the scheduled time...');
 });
 
@@ -61,10 +78,10 @@ async function fetchDailyLeetCode() {
               }
             }
         `;
-        
+
         const response = await axios.post('https://leetcode.com/graphql', { query });
         const data = response.data.data.activeDailyCodingChallengeQuestion;
-        
+
         const date = data.date;
         const title = data.question.title;
         const difficulty = data.question.difficulty;
@@ -80,3 +97,17 @@ async function fetchDailyLeetCode() {
 
 // Start the client
 client.initialize();
+
+// --- Graceful Shutdown Logic ---
+// This safely closes the hidden browser to prevent memory leaks if you stop the script
+process.on('SIGINT', async () => {
+    console.log('\n🛑 Shutting down bot... Closing browser safely.');
+    await client.destroy();
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    console.log('\n🛑 Shutting down bot... Closing browser safely.');
+    await client.destroy();
+    process.exit(0);
+});
