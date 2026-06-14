@@ -59,19 +59,28 @@ client.on('ready', async () => {
     }
     console.log(`✅ Found group: ${myGroup.name}`);
 
-    // Schedule the task - Currently set to run at 8:00 AM server time every day
-    // Format: minute hour dayOfMonth month dayOfWeek
-    cron.schedule('0 8 * * *', async () => {
+    // Reusable function to fetch and send the question
+    const sendDailyQuestion = async () => {
         console.log('Fetching daily LeetCode question...');
         const questionMessage = await fetchDailyLeetCode();
-
+        
         if (questionMessage) {
             await client.sendMessage(myGroup.id._serialized, questionMessage);
             console.log('✅ Daily question sent to group!');
+        } else {
+            console.log('❌ Failed to fetch the daily question.');
         }
-    });
+    };
 
+    // Schedule the task - Currently set to run at 8:00 AM every day
+    // The format is: minute hour dayOfMonth month dayOfWeek
+    cron.schedule('0 8 * * *', sendDailyQuestion);
+    
     console.log('⏳ Bot is now running and waiting for the scheduled time...');
+
+    // Send the question immediately for today
+    console.log('🚀 Sending today\'s question immediately upon startup...');
+    await sendDailyQuestion();
 });
 
 // Function to get the daily question from LeetCode's GraphQL API
