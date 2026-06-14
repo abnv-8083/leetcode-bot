@@ -36,6 +36,14 @@ client.on('authenticated', () => {
     console.log('📱 QR Scanned! Authentication successful. Syncing chats now... (Please wait)');
 });
 
+client.on('auth_failure', msg => {
+    console.error('❌ Authentication failure:', msg);
+});
+
+client.on('disconnected', (reason) => {
+    console.error('❌ Client was logged out or disconnected:', reason);
+});
+
 // The main loop once the bot is fully logged in and synced
 client.on('ready', async () => {
     console.log('✅ WhatsApp Client is ready!');
@@ -112,4 +120,12 @@ process.on('SIGTERM', async () => {
     console.log('\n🛑 Shutting down bot... Closing browser safely.');
     await client.destroy();
     process.exit(0);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('❌ Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
