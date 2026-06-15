@@ -7,6 +7,7 @@ const fs = require('fs');
 // ⚠️ IMPORTANT: Replace this with your exact WhatsApp group name
 const TARGET_GROUP_NAME = 'Daily Leetcode';
 const STATS_FILE = './stats.json';
+const PROFILES_FILE = './profiles.json';
 
 // Helper to get today's date string in IST (e.g. "2026-06-15")
 const getTodayDateStr = () => {
@@ -22,6 +23,15 @@ const loadStats = () => {
     return {};
 };
 const saveStats = (stats) => fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+
+// Helper to load/save profiles
+const loadProfiles = () => {
+    if (fs.existsSync(PROFILES_FILE)) {
+        return JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
+    }
+    return {};
+};
+const saveProfiles = (profiles) => fs.writeFileSync(PROFILES_FILE, JSON.stringify(profiles, null, 2));
 
 // Helper to mark a user as done for today
 const markUserDone = (userId) => {
@@ -84,6 +94,34 @@ client.on('disconnected', (reason) => {
     console.error('❌ Client was logged out or disconnected:', reason);
 });
 
+// Function to check if a user has solved today's question
+const checkLeetCodeSubmission = async (username, targetSlug) => {
+    try {
+        const query = `
+            query recentAcSubmissions($username: String!, $limit: Int!) {
+              recentAcSubmissionList(username: $username, limit: $limit) {
+                titleSlug
+                timestamp
+              }
+            }
+        `;
+        const response = await axios.post('https://leetcode.com/graphql', {
+            query,
+            variables: { username, limit: 15 }
+        });
+        
+        const submissions = response.data.data.recentAcSubmissionList;
+        if (!submissions || submissions.length === 0) return false;
+
+        const now = Date.now() / 1000;
+        // Check if any recent submission matches the target slug within 24h
+        return submissions.some(sub => sub.titleSlug === targetSlug && (now - sub.timestamp) < 86400);
+    } catch (e) {
+        console.error('❌ Error checking LeetCode submission:', e.message);
+        return false;
+    }
+}
+
 // The main loop once the bot is fully logged in and synced
 client.on('ready', async () => {
     console.log('✅ WhatsApp Client is ready!');
@@ -136,6 +174,22 @@ client.on('ready', async () => {
                 const text = msg.body.toLowerCase().trim();
                 const doneKeywords = ['done', 'completed', 'finished', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'];
                 
+                // Link profile
+                if (text.startsWith('!link ')) {
+                    const username = text.split(' ')[1];
+                    if (username) {
+                        const profiles = loadProfiles();
+                        const userId = msg.fromMe ? client.info.wid._serialized : msg.author;
+                        const cleanId = userId ? userId.replace(/:\d+@/, '@') : null;
+                        if (cleanId) {
+                            profiles[cleanId] = username;
+                            saveProfiles(profiles);
+                            await msg.reply(`✅ Successfully linked your WhatsApp to LeetCode profile: *${username}*`);
+                        }
+                    }
+                    return;
+                }
+
                 if (doneKeywords.some(kw => text.includes(kw))) {
                     const idsToMark = [];
                     if (msg.fromMe) {
@@ -150,6 +204,38 @@ client.on('ready', async () => {
                         } catch (err) {}
                     }
 
+                    if (idsToMark.length === 0) return;
+
+                    // Verify via LeetCode API first
+                    const profiles = loadProfiles();
+                    let linkedUsername = null;
+                    for (let id of idsToMark) {
+                        const cleanId = id.replace(/:\d+@/, '@');
+                        if (profiles[cleanId]) {
+                            linkedUsername = profiles[cleanId];
+                            break;
+                        }
+                    }
+
+                    if (!linkedUsername) {
+                        await msg.reply('❌ You need to link your LeetCode profile first! Type `!link your_username` to link it.');
+                        return;
+                    }
+
+                    if (!global.todayTitleSlug) {
+                        await msg.reply('❌ Today\'s question data is not loaded yet. Try again later.');
+                        return;
+                    }
+
+                    await msg.react('⏳'); // show it's checking
+                    const hasSolved = await checkLeetCodeSubmission(linkedUsername, global.todayTitleSlug);
+
+                    if (!hasSolved) {
+                        await msg.reply(`❌ I checked LeetCode (*${linkedUsername}*) and couldn't find an accepted submission for today's challenge. Make sure your solution is accepted!`);
+                        await msg.react('❌');
+                        return;
+                    }
+
                     let isNew = false;
                     for (let id of idsToMark) {
                         if (markUserDone(id)) {
@@ -158,8 +244,10 @@ client.on('ready', async () => {
                     }
 
                     if (isNew) {
-                        console.log(`✅ Marked user as done (${idsToMark.join(', ')}).`);
+                        console.log(`✅ Verified and marked user as done (${idsToMark.join(', ')}).`);
                         await msg.react('✅');
+                    } else {
+                        await msg.react('👍'); // Already marked, but verified again
                     }
                 }
 
@@ -232,9 +320,10 @@ async function fetchDailyLeetCode() {
         const title = data.question.title;
         const difficulty = data.question.difficulty;
         const link = `https://leetcode.com${data.link}`;
+        global.todayTitleSlug = data.link.split('/')[2];
 
         // Format the message for WhatsApp
-        return `🎯 *LeetCode Daily Challenge* (${date})\n\n*Question:* ${title}\n*Difficulty:* ${difficulty}\n*Link:* ${link}\n\nGood luck everyone! 🚀\n\n_💡 Tip: Reply with "done" when you finish to be tracked! Type "!stats" anytime to check the group's progress._`;
+        return `🎯 *LeetCode Daily Challenge* (${date})\n\n*Question:* ${title}\n*Difficulty:* ${difficulty}\n*Link:* ${link}\n\nGood luck everyone! 🚀\n\n_💡 Tip: Reply with "done" after solving! You must first link your profile using "!link your_username". Type "!stats" anytime to check the group's progress._`;
     } catch (error) {
         console.error('❌ Error fetching LeetCode data:', error.message);
         return null;
