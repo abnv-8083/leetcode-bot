@@ -137,7 +137,12 @@ client.on('ready', async () => {
                 const doneKeywords = ['done', 'completed', 'finished', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'];
                 
                 if (doneKeywords.some(kw => text.includes(kw))) {
-                    const userId = msg.fromMe ? client.info.wid._serialized : msg.author;
+                    let userId = client.info.wid._serialized;
+                    if (!msg.fromMe) {
+                        const contact = await msg.getContact();
+                        userId = contact.id._serialized;
+                    }
+
                     if (userId) {
                         const isNew = markUserDone(userId);
                         if (isNew) {
