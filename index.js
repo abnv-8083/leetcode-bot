@@ -174,6 +174,17 @@ client.on('ready', async () => {
                 const text = msg.body.toLowerCase().trim();
                 const doneKeywords = ['done', 'completed', 'finished', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'];
                 
+                // Guide command
+                if (text === '!guide' || text === '!help') {
+                    const guideMsg = `*🤖 BOT GUIDE:*\n\n` +
+                                     `1️⃣ *Link Profile:* Type \`!link your_leetcode_username\` (e.g. \`!link neal_wu\`) to connect your account. You only need to do this once!\n\n` +
+                                     `2️⃣ *Submit:* Solve the daily problem on LeetCode. Make sure your profile is Public!\n\n` +
+                                     `3️⃣ *Verify:* Type \`done\` in this group. The bot will automatically scan your LeetCode profile to verify your "Accepted" submission for today.\n\n` +
+                                     `4️⃣ *Progress:* Type \`!stats\` to see who has finished today's challenge.`;
+                    await msg.reply(guideMsg);
+                    return;
+                }
+
                 // Link profile
                 if (text.startsWith('!link ')) {
                     const username = text.split(' ')[1];
@@ -323,7 +334,12 @@ async function fetchDailyLeetCode() {
         global.todayTitleSlug = data.link.split('/')[2];
 
         // Format the message for WhatsApp
-        return `🎯 *LeetCode Daily Challenge* (${date})\n\n*Question:* ${title}\n*Difficulty:* ${difficulty}\n*Link:* ${link}\n\nGood luck everyone! 🚀\n\n_💡 Tip: Reply with "done" after solving! You must first link your profile using "!link your_username". Type "!stats" anytime to check the group's progress._`;
+        return `🎯 *LeetCode Daily Challenge* (${date})\n\n*Question:* ${title}\n*Difficulty:* ${difficulty}\n*Link:* ${link}\n\nGood luck everyone! 🚀\n\n` +
+               `*🤖 BOT GUIDE:*\n` +
+               `1️⃣ *Link:* Type \`!link your_leetcode_username\`\n` +
+               `2️⃣ *Submit:* Get an "Accepted" result on LeetCode.\n` +
+               `3️⃣ *Verify:* Type \`done\` here to be automatically verified!\n` +
+               `4️⃣ *Progress:* Type \`!stats\``;
     } catch (error) {
         console.error('❌ Error fetching LeetCode data:', error.message);
         return null;
