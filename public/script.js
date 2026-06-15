@@ -11,9 +11,37 @@ const statusDot = document.getElementById('status-dot');
 const dateBadge = document.getElementById('current-date-badge');
 const statsList = document.getElementById('stats-list');
 const profilesTbody = document.getElementById('profiles-tbody');
+const toastContainer = document.getElementById('toast-container');
 
 const triggerBtn = document.getElementById('trigger-daily-btn');
 const resetBtn = document.getElementById('reset-stats-btn');
+
+// --- Dynamic UI Helpers ---
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    let icon = 'ℹ️';
+    if(type === 'success') icon = '✅';
+    if(type === 'error') icon = '❌';
+
+    toast.innerHTML = `<span>${icon}</span> <span>${message}</span>`;
+    toastContainer.appendChild(toast);
+
+    // Click to dismiss
+    toast.addEventListener('click', () => {
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    });
+
+    // Auto dismiss
+    setTimeout(() => {
+        if(toast.parentElement) {
+            toast.classList.add('hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 4000);
+}
 
 // --- Login Logic ---
 loginBtn.addEventListener('click', () => {
@@ -100,6 +128,7 @@ function renderProfiles(profiles) {
         const groupText = inGroup ? 'Kick from Group' : 'Add to Group';
         const groupClass = inGroup ? 'danger-btn' : 'primary-btn';
 
+        tr.style.animationDelay = `${index * 0.05}s`;
         tr.innerHTML = `
             <td><code>${id}</code></td>
             <td><strong>${username}</strong></td>
@@ -118,9 +147,10 @@ async function userAction(action, userId) {
 
     try {
         await apiCall('/api/user-action', 'POST', { action, userId });
+        showToast(`Successfully performed: ${action}`, 'success');
         fetchStats(); // refresh data
     } catch (e) {
-        alert('Failed to perform action.');
+        showToast(`Failed to perform ${action}.`, 'error');
     }
 }
 
@@ -148,11 +178,12 @@ function renderStats(todayStats, profiles) {
         return;
     }
 
-    todayStats.forEach(id => {
+    todayStats.forEach((id, index) => {
         const pData = profiles[id];
         const username = (typeof pData === 'string' ? pData : pData?.username) || 'Unknown User';
         const div = document.createElement('div');
         div.className = 'stat-item';
+        div.style.animationDelay = `${index * 0.1}s`;
         div.innerHTML = `
             <span class="icon">✅</span>
             <strong>${username}</strong>
@@ -170,9 +201,9 @@ triggerBtn.addEventListener('click', async () => {
     triggerBtn.disabled = true;
     try {
         await apiCall('/api/trigger-daily', 'POST');
-        alert('Daily question triggered successfully!');
+        showToast('Daily question triggered successfully!', 'success');
     } catch (e) {
-        alert('Failed to trigger daily question.');
+        showToast('Failed to trigger daily question.', 'error');
     }
     triggerBtn.innerText = '🚀 Send Daily Question Now';
     triggerBtn.disabled = false;
@@ -186,9 +217,9 @@ resetBtn.addEventListener('click', async () => {
     try {
         await apiCall('/api/reset-stats', 'POST');
         fetchStats(); // Refresh UI
-        alert("Today's stats have been reset.");
+        showToast("Today's stats have been reset.", 'success');
     } catch (e) {
-        alert('Failed to reset stats.');
+        showToast('Failed to reset stats.', 'error');
     }
     resetBtn.innerText = '⚠️ Reset Today\'s Stats';
     resetBtn.disabled = false;
