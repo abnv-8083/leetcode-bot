@@ -26,8 +26,8 @@ const saveStats = (stats) => fs.writeFileSync(STATS_FILE, JSON.stringify(stats, 
 // Helper to mark a user as done for today
 const markUserDone = (userId) => {
     if (!userId) return false;
-    // Strip multi-device tags (e.g. 919876543210:1@c.us -> 919876543210@c.us)
-    const cleanId = userId.split(':')[0].split('@')[0] + '@c.us';
+    // Strip multi-device tags (e.g. 919876543210:1@c.us -> 919876543210@c.us) but preserve @lid or @c.us domains
+    const cleanId = userId.replace(/:\d+@/, '@');
     
     const stats = loadStats();
     const today = getTodayDateStr();
@@ -101,7 +101,7 @@ client.on('ready', async () => {
     // Function to generate and send stats summary
     const sendStatsSummary = async () => {
         // Clean any saved multi-device IDs to match participant formats
-        const doneUserIds = getDoneUsersToday().map(id => id.split(':')[0].split('@')[0] + '@c.us');
+        const doneUserIds = getDoneUsersToday().map(id => id.replace(/:\d+@/, '@'));
         
         // Refresh group participants just in case
         const groupChat = await client.getChatById(myGroup.id._serialized);
