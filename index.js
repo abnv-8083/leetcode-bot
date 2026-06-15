@@ -25,11 +25,15 @@ const saveStats = (stats) => fs.writeFileSync(STATS_FILE, JSON.stringify(stats, 
 
 // Helper to mark a user as done for today
 const markUserDone = (userId) => {
+    if (!userId) return;
+    // Strip multi-device tags (e.g. 919876543210:1@c.us -> 919876543210@c.us)
+    const cleanId = userId.split(':')[0].split('@')[0] + '@c.us';
+    
     const stats = loadStats();
     const today = getTodayDateStr();
     if (!stats[today]) stats[today] = [];
-    if (!stats[today].includes(userId)) {
-        stats[today].push(userId);
+    if (!stats[today].includes(cleanId)) {
+        stats[today].push(cleanId);
         saveStats(stats);
     }
 };
@@ -94,7 +98,8 @@ client.on('ready', async () => {
 
     // Function to generate and send stats summary
     const sendStatsSummary = async () => {
-        const doneUserIds = getDoneUsersToday();
+        // Clean any saved multi-device IDs to match participant formats
+        const doneUserIds = getDoneUsersToday().map(id => id.split(':')[0].split('@')[0] + '@c.us');
         
         // Refresh group participants just in case
         const groupChat = await client.getChatById(myGroup.id._serialized);
@@ -105,9 +110,6 @@ client.on('ready', async () => {
         const mentionsArgs = [];
 
         for (let participant of allParticipants) {
-            // Skip the bot itself
-            if (participant.id._serialized === client.info.wid._serialized) continue;
-
             if (doneUserIds.includes(participant.id._serialized)) {
                 doneMentions.push(`@${participant.id.user}`);
                 mentionsArgs.push(participant.id._serialized);
@@ -133,10 +135,12 @@ client.on('ready', async () => {
                 const doneKeywords = ['done', 'completed', 'finished', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'];
                 
                 if (doneKeywords.some(kw => text.includes(kw))) {
-                    const userId = msg.author || msg.from;
-                    markUserDone(userId);
-                    console.log(`✅ Marked user ${userId} as done.`);
-                    await msg.react('✅');
+                    const userId = msg.fromMe ? client.info.wid._serialized : msg.author;
+                    if (userId) {
+                        markUserDone(userId);
+                        console.log(`✅ Marked user ${userId} as done.`);
+                        await msg.react('✅');
+                    }
                 }
 
                 if (text === 'stats' || text === '!stats') {
