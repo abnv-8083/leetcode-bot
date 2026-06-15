@@ -74,7 +74,10 @@ client.on('ready', async () => {
 
     // Schedule the task - Currently set to run at 8:00 AM every day
     // The format is: minute hour dayOfMonth month dayOfWeek
-    cron.schedule('0 8 * * *', sendDailyQuestion);
+    cron.schedule('0 8 * * *', sendDailyQuestion, {
+        scheduled: true,
+        timezone: "Asia/Kolkata" // Force it to run at 8 AM IST (Indian Standard Time), ignoring the AWS UTC server time
+    });
     
     console.log('⏳ Bot is now running and waiting for the scheduled time...');
 
