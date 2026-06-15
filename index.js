@@ -25,7 +25,7 @@ const saveStats = (stats) => fs.writeFileSync(STATS_FILE, JSON.stringify(stats, 
 
 // Helper to mark a user as done for today
 const markUserDone = (userId) => {
-    if (!userId) return;
+    if (!userId) return false;
     // Strip multi-device tags (e.g. 919876543210:1@c.us -> 919876543210@c.us)
     const cleanId = userId.split(':')[0].split('@')[0] + '@c.us';
     
@@ -35,7 +35,9 @@ const markUserDone = (userId) => {
     if (!stats[today].includes(cleanId)) {
         stats[today].push(cleanId);
         saveStats(stats);
+        return true; // Newly marked
     }
+    return false; // Already marked
 };
 
 const getDoneUsersToday = () => {
@@ -137,9 +139,11 @@ client.on('ready', async () => {
                 if (doneKeywords.some(kw => text.includes(kw))) {
                     const userId = msg.fromMe ? client.info.wid._serialized : msg.author;
                     if (userId) {
-                        markUserDone(userId);
-                        console.log(`✅ Marked user ${userId} as done.`);
-                        await msg.react('✅');
+                        const isNew = markUserDone(userId);
+                        if (isNew) {
+                            console.log(`✅ Marked user ${userId} as done.`);
+                            await msg.react('✅');
+                        }
                     }
                 }
 
@@ -214,7 +218,7 @@ async function fetchDailyLeetCode() {
         const link = `https://leetcode.com${data.link}`;
 
         // Format the message for WhatsApp
-        return `🎯 *LeetCode Daily Challenge* (${date})\n\n*Question:* ${title}\n*Difficulty:* ${difficulty}\n*Link:* ${link}\n\nGood luck everyone! 🚀`;
+        return `🎯 *LeetCode Daily Challenge* (${date})\n\n*Question:* ${title}\n*Difficulty:* ${difficulty}\n*Link:* ${link}\n\nGood luck everyone! 🚀\n\n_💡 Tip: Reply with "done" when you finish to be tracked! Type "!stats" anytime to check the group's progress._`;
     } catch (error) {
         console.error('❌ Error fetching LeetCode data:', error.message);
         return null;
