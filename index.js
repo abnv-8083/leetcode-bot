@@ -2,9 +2,42 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
 const axios = require('axios');
+const fs = require('fs');
 
 // ⚠️ IMPORTANT: Replace this with your exact WhatsApp group name
 const TARGET_GROUP_NAME = 'Daily Leetcode';
+const STATS_FILE = './stats.json';
+
+// Helper to get today's date string in IST (e.g. "2026-06-15")
+const getTodayDateStr = () => {
+    const d = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Helper to load/save stats
+const loadStats = () => {
+    if (fs.existsSync(STATS_FILE)) {
+        return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+    }
+    return {};
+};
+const saveStats = (stats) => fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+
+// Helper to mark a user as done for today
+const markUserDone = (userId) => {
+    const stats = loadStats();
+    const today = getTodayDateStr();
+    if (!stats[today]) stats[today] = [];
+    if (!stats[today].includes(userId)) {
+        stats[today].push(userId);
+        saveStats(stats);
+    }
+};
+
+const getDoneUsersToday = () => {
+    const stats = loadStats();
+    return stats[getTodayDateStr()] || [];
+};
 
 // Initialize the WhatsApp Client with AWS-optimized settings
 const client = new Client({
@@ -59,6 +92,63 @@ client.on('ready', async () => {
     }
     console.log(`✅ Found group: ${myGroup.name}`);
 
+    // Function to generate and send stats summary
+    const sendStatsSummary = async () => {
+        const doneUserIds = getDoneUsersToday();
+        
+        // Refresh group participants just in case
+        const groupChat = await client.getChatById(myGroup.id._serialized);
+        const allParticipants = groupChat.participants;
+        
+        const doneMentions = [];
+        const notDoneMentions = [];
+        const mentionsArgs = [];
+
+        for (let participant of allParticipants) {
+            // Skip the bot itself
+            if (participant.id._serialized === client.info.wid._serialized) continue;
+
+            if (doneUserIds.includes(participant.id._serialized)) {
+                doneMentions.push(`@${participant.id.user}`);
+                mentionsArgs.push(participant.id._serialized);
+            } else {
+                notDoneMentions.push(`@${participant.id.user}`);
+                mentionsArgs.push(participant.id._serialized);
+            }
+        }
+
+        const report = `📊 *Daily LeetCode Progress (${getTodayDateStr()})* 📊\n\n` +
+                       `✅ *Finished:*\n${doneMentions.length > 0 ? doneMentions.join(', ') : 'No one yet! 😢'}\n\n` +
+                       `❌ *Not Finished:*\n${notDoneMentions.length > 0 ? notDoneMentions.join('\n') : 'Everyone is done! 🎉'}`;
+
+        await groupChat.sendMessage(report, { mentions: mentionsArgs });
+    };
+
+    // Listen to messages for completions and commands
+    client.on('message', async (msg) => {
+        try {
+            const chat = await msg.getChat();
+            if (chat.isGroup && chat.name === TARGET_GROUP_NAME) {
+                const text = msg.body.toLowerCase().trim();
+                const doneKeywords = ['done', 'completed', 'finished', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'];
+                
+                if (doneKeywords.some(kw => text.includes(kw))) {
+                    const userId = msg.author || msg.from;
+                    markUserDone(userId);
+                    console.log(`✅ Marked user ${userId} as done.`);
+                    await msg.react('✅');
+                }
+
+                if (text === 'stats' || text === '!stats') {
+                    console.log('📊 Stats command triggered.');
+                    await sendStatsSummary();
+                }
+            }
+        } catch (err) {
+            console.error('Error in message listener:', err);
+        }
+    });
+
     // Reusable function to fetch and send the question
     const sendDailyQuestion = async () => {
         console.log('Fetching daily LeetCode question...');
@@ -77,6 +167,15 @@ client.on('ready', async () => {
     cron.schedule('0 8 * * *', sendDailyQuestion, {
         scheduled: true,
         timezone: "Asia/Kolkata" // Force it to run at 8 AM IST (Indian Standard Time), ignoring the AWS UTC server time
+    });
+
+    // Schedule the end-of-day stats summary at 11:30 PM IST
+    cron.schedule('30 23 * * *', async () => {
+        console.log('Sending end-of-day stats summary...');
+        await sendStatsSummary();
+    }, {
+        scheduled: true,
+        timezone: "Asia/Kolkata"
     });
     
     console.log('⏳ Bot is now running and waiting for the scheduled time...');
