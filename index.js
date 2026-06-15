@@ -3,6 +3,12 @@ const qrcode = require('qrcode-terminal');
 const cron = require('node-cron');
 const axios = require('axios');
 const fs = require('fs');
+const express = require('express');
+
+// --- Web Server Setup ---
+const app = express();
+app.use(express.json());
+app.use(express.static('public'));
 
 // ⚠️ IMPORTANT: Replace this with your exact WhatsApp group name
 const TARGET_GROUP_NAME = 'Daily Leetcode';
@@ -135,6 +141,7 @@ client.on('ready', async () => {
         return;
     }
     console.log(`✅ Found group: ${myGroup.name}`);
+    global.myGroup = myGroup; // Export for Web API
 
     // Function to generate and send stats summary
     const sendStatsSummary = async () => {
@@ -278,12 +285,13 @@ client.on('ready', async () => {
         const questionMessage = await fetchDailyLeetCode();
         
         if (questionMessage) {
-            await client.sendMessage(myGroup.id._serialized, questionMessage);
+            await client.sendMessage(global.myGroup.id._serialized, questionMessage);
             console.log('✅ Daily question sent to group!');
         } else {
             console.log('❌ Failed to fetch the daily question.');
         }
     };
+    global.sendDailyQuestionRef = sendDailyQuestion; // Export for Web API
 
     // Schedule the task - Currently set to run at 8:00 AM every day
     // The format is: minute hour dayOfMonth month dayOfWeek
@@ -348,6 +356,52 @@ async function fetchDailyLeetCode() {
 
 // Start the client
 client.initialize();
+
+// --- Web API Routes ---
+const ADMIN_PASS = 'admin123';
+
+const checkAuth = (req, res, next) => {
+    if (req.headers.authorization !== ADMIN_PASS) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+};
+
+app.get('/api/status', checkAuth, (req, res) => {
+    res.json({
+        ready: client.info !== undefined,
+        groupFound: global.myGroup !== undefined,
+        todayDate: getTodayDateStr()
+    });
+});
+
+app.get('/api/stats', checkAuth, (req, res) => {
+    res.json({
+        stats: loadStats(),
+        profiles: loadProfiles()
+    });
+});
+
+app.post('/api/reset-stats', checkAuth, (req, res) => {
+    const stats = loadStats();
+    stats[getTodayDateStr()] = [];
+    saveStats(stats);
+    res.json({ success: true });
+});
+
+app.post('/api/trigger-daily', checkAuth, async (req, res) => {
+    if (!global.sendDailyQuestionRef) {
+        return res.status(400).json({ error: 'Bot is not ready yet' });
+    }
+    await global.sendDailyQuestionRef();
+    res.json({ success: true });
+});
+
+// Start the Dashboard Server
+const PORT = 3000;
+app.listen(PORT, () => {
+    console.log(`🌐 Web Admin Dashboard running on http://localhost:${PORT}`);
+});
 
 // --- Graceful Shutdown Logic ---
 // This safely closes the hidden browser to prevent memory leaks if you stop the script

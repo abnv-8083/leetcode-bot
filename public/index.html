@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeetCode Bot Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="login-overlay" class="overlay active">
+        <div class="glass-panel login-box">
+            <div class="logo-container">
+                <div class="logo-icon">🤖</div>
+                <h2>Admin Login</h2>
+            </div>
+            <input type="password" id="password-input" placeholder="Enter Admin Password">
+            <button id="login-btn" class="primary-btn">Unlock Dashboard</button>
+            <p id="login-error" class="error-msg hidden">Incorrect Password</p>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="dashboard hidden">
+        <header class="glass-panel header">
+            <div class="logo-container">
+                <div class="logo-icon">🎯</div>
+                <h1>LeetCode Bot Admin</h1>
+            </div>
+            <div class="status-badge">
+                <span class="status-indicator loading" id="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </header>
+
+        <main class="grid-container">
+            <!-- Controls Panel -->
+            <section class="glass-panel card controls-card">
+                <h2>Quick Actions</h2>
+                <p>Manage the bot directly from here.</p>
+                <div class="button-group">
+                    <button id="trigger-daily-btn" class="primary-btn pulse-btn">
+                        🚀 Send Daily Question Now
+                    </button>
+                    <button id="reset-stats-btn" class="danger-btn">
+                        ⚠️ Reset Today's Stats
+                    </button>
+                </div>
+            </section>
+
+            <!-- Stats Panel -->
+            <section class="glass-panel card stats-card">
+                <div class="card-header">
+                    <h2>Today's Leaderboard</h2>
+                    <span class="date-badge" id="current-date-badge">Loading...</span>
+                </div>
+                <div class="stats-list" id="stats-list">
+                    <div class="empty-state">No data yet.</div>
+                </div>
+            </section>
+
+            <!-- Profiles Panel -->
+            <section class="glass-panel card profiles-card">
+                <h2>Linked Profiles</h2>
+                <div class="table-container">
+                    <table class="glass-table">
+                        <thead>
+                            <tr>
+                                <th>WhatsApp ID</th>
+                                <th>LeetCode Username</th>
+                            </tr>
+                        </thead>
+                        <tbody id="profiles-tbody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
