@@ -447,14 +447,30 @@ app.post('/api/user-action', checkAuth, async (req, res) => {
                 if (action === 'unblock') await contact.unblock();
             } catch (blockErr) {
                 console.log(`Native block failed for ${contact.id._serialized}. Trying raw fallback...`);
-                // Fallback to bypass whatsapp-web.js broken getContactToBlockOnlyUseIfNoAssociatedChat
+                // Fallback to bypass whatsapp-web.js broken WidFactory / getContactToBlock
                 await client.pupPage.evaluate(async (cid, act) => {
-                    const wid = window.Store.WidFactory.createWid(cid);
-                    const c = window.Store.Contact.get(cid) || window.Store.Contact.add({ id: wid, id: wid });
-                    if (act === 'block') {
-                        await window.Store.BlockContact.blockContact(c);
+                    let c = window.Store.Contact.get(cid);
+                    if (!c) {
+                        try {
+                            const chat = await window.Store.Chat.find(cid);
+                            if (chat && chat.contact) c = chat.contact;
+                        } catch(e) {}
+                    }
+                    if (!c) {
+                        // Last resort, attempt to use WWebJS injected method if it exists
+                        if (window.WWebJS && window.WWebJS.getContactModel) {
+                            c = window.WWebJS.getContactModel(cid);
+                        }
+                    }
+                    
+                    if (c) {
+                        if (act === 'block') {
+                            await window.Store.BlockContact.blockContact(c);
+                        } else {
+                            await window.Store.BlockContact.unblockContact(c);
+                        }
                     } else {
-                        await window.Store.BlockContact.unblockContact(c);
+                        throw new Error("Could not find or create Contact model in WhatsApp Web memory.");
                     }
                 }, contact.id._serialized, action);
             }
