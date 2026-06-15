@@ -432,9 +432,32 @@ app.post('/api/user-action', checkAuth, async (req, res) => {
 
     try {
         if (action === 'block' || action === 'unblock') {
-            const contact = await client.getContactById(userId);
-            if (action === 'block') await contact.block();
-            if (action === 'unblock') await contact.unblock();
+            let contact = await client.getContactById(userId);
+            
+            // Fix for @lid crash: Try to block using the real @c.us phone number instead of @lid
+            if (contact && contact.id._serialized.includes('@lid') && contact.number) {
+                const phoneId = `${contact.number}@c.us`;
+                try {
+                    contact = await client.getContactById(phoneId);
+                } catch (e) {}
+            }
+
+            try {
+                if (action === 'block') await contact.block();
+                if (action === 'unblock') await contact.unblock();
+            } catch (blockErr) {
+                console.log(`Native block failed for ${contact.id._serialized}. Trying raw fallback...`);
+                // Fallback to bypass whatsapp-web.js broken getContactToBlockOnlyUseIfNoAssociatedChat
+                await client.pupPage.evaluate(async (cid, act) => {
+                    const wid = window.Store.WidFactory.createWid(cid);
+                    const c = window.Store.Contact.get(cid) || window.Store.Contact.add({ id: wid, id: wid });
+                    if (act === 'block') {
+                        await window.Store.BlockContact.blockContact(c);
+                    } else {
+                        await window.Store.BlockContact.unblockContact(c);
+                    }
+                }, contact.id._serialized, action);
+            }
         } else if (action === 'kick') {
             await global.myGroup.removeParticipants([userId]);
         } else if (action === 'add') {
