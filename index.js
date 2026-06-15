@@ -375,10 +375,37 @@ app.get('/api/status', checkAuth, (req, res) => {
     });
 });
 
-app.get('/api/stats', checkAuth, (req, res) => {
+app.get('/api/stats', checkAuth, async (req, res) => {
+    const rawProfiles = loadProfiles();
+    const enrichedProfiles = {};
+    
+    // Check block status and group status for each user
+    if (client.info && global.myGroup) {
+        try {
+            const groupChat = await client.getChatById(global.myGroup.id._serialized);
+            const participants = groupChat.participants.map(p => p.id._serialized);
+
+            for (const [id, username] of Object.entries(rawProfiles)) {
+                let isBlocked = false;
+                try {
+                    const contact = await client.getContactById(id);
+                    isBlocked = contact.isBlocked;
+                } catch (e) {}
+
+                enrichedProfiles[id] = {
+                    username: username,
+                    isBlocked: isBlocked,
+                    inGroup: participants.includes(id)
+                };
+            }
+        } catch(e) {
+            console.error("Error enriching profiles:", e);
+        }
+    }
+
     res.json({
         stats: loadStats(),
-        profiles: loadProfiles()
+        profiles: Object.keys(enrichedProfiles).length > 0 ? enrichedProfiles : rawProfiles // fallback
     });
 });
 
@@ -395,6 +422,29 @@ app.post('/api/trigger-daily', checkAuth, async (req, res) => {
     }
     await global.sendDailyQuestionRef();
     res.json({ success: true });
+});
+
+app.post('/api/user-action', checkAuth, async (req, res) => {
+    const { action, userId } = req.body;
+    if (!action || !userId || !global.myGroup) {
+        return res.status(400).json({ error: 'Bad Request' });
+    }
+
+    try {
+        if (action === 'block' || action === 'unblock') {
+            const contact = await client.getContactById(userId);
+            if (action === 'block') await contact.block();
+            if (action === 'unblock') await contact.unblock();
+        } else if (action === 'kick') {
+            await global.myGroup.removeParticipants([userId]);
+        } else if (action === 'add') {
+            await global.myGroup.addParticipants([userId]);
+        }
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error in user action:', e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Start the Dashboard Server

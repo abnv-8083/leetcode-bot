@@ -28,20 +28,7 @@ passwordInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') loginBtn.click();
 });
 
-// --- API Calls ---
-async function apiCall(endpoint, method = 'GET') {
-    const res = await fetch(endpoint, {
-        method,
-        headers: {
-            'Authorization': adminToken,
-            'Content-Type': 'application/json'
-        }
-    });
-    if (res.status === 401) {
-        throw new Error('Unauthorized');
-    }
-    return res.json();
-}
+// API Call is redefined above so remove the old one:
 
 async function checkStatus() {
     try {
@@ -92,18 +79,66 @@ function renderProfiles(profiles) {
     profilesTbody.innerHTML = '';
     const keys = Object.keys(profiles);
     if (keys.length === 0) {
-        profilesTbody.innerHTML = `<tr><td colspan="2" class="empty-state">No linked profiles yet.</td></tr>`;
+        profilesTbody.innerHTML = `<tr><td colspan="3" class="empty-state">No linked profiles yet.</td></tr>`;
         return;
     }
     
     keys.forEach(id => {
         const tr = document.createElement('tr');
+        
+        // Handle either enriched object or raw string (fallback)
+        const username = typeof profiles[id] === 'string' ? profiles[id] : profiles[id].username;
+        const isBlocked = typeof profiles[id] === 'string' ? false : profiles[id].isBlocked;
+        const inGroup = typeof profiles[id] === 'string' ? true : profiles[id].inGroup;
+
+        // Action Buttons
+        const blockAction = isBlocked ? 'unblock' : 'block';
+        const blockText = isBlocked ? 'Unblock' : 'Block Contact';
+        const blockClass = isBlocked ? 'primary-btn' : 'danger-btn';
+
+        const groupAction = inGroup ? 'kick' : 'add';
+        const groupText = inGroup ? 'Kick from Group' : 'Add to Group';
+        const groupClass = inGroup ? 'danger-btn' : 'primary-btn';
+
         tr.innerHTML = `
             <td><code>${id}</code></td>
-            <td><strong>${profiles[id]}</strong></td>
+            <td><strong>${username}</strong></td>
+            <td class="action-cell">
+                <button class="${blockClass} small-btn" onclick="userAction('${blockAction}', '${id}')">${blockText}</button>
+                <button class="${groupClass} small-btn" onclick="userAction('${groupAction}', '${id}')">${groupText}</button>
+            </td>
         `;
         profilesTbody.appendChild(tr);
     });
+}
+
+// --- Action Buttons ---
+async function userAction(action, userId) {
+    if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+
+    try {
+        await apiCall('/api/user-action', 'POST', { action, userId });
+        fetchStats(); // refresh data
+    } catch (e) {
+        alert('Failed to perform action.');
+    }
+}
+
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const options = {
+        method,
+        headers: {
+            'Authorization': adminToken,
+            'Content-Type': 'application/json'
+        }
+    };
+    if (body) options.body = JSON.stringify(body);
+
+    const res = await fetch(endpoint, options);
+    if (res.status === 401) {
+        throw new Error('Unauthorized');
+    }
+    return res.json();
 }
 
 function renderStats(todayStats, profiles) {
@@ -114,7 +149,8 @@ function renderStats(todayStats, profiles) {
     }
 
     todayStats.forEach(id => {
-        const username = profiles[id] || 'Unknown User';
+        const pData = profiles[id];
+        const username = (typeof pData === 'string' ? pData : pData?.username) || 'Unknown User';
         const div = document.createElement('div');
         div.className = 'stat-item';
         div.innerHTML = `

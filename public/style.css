@@ -144,6 +144,13 @@ button {
     text-align: center;
 }
 
+.small-btn {
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
 /* Dashboard Layout */
 .dashboard {
     max-width: 1200px;
@@ -291,6 +298,12 @@ button {
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+}
+
+.action-cell {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .glass-table tr:last-child td {
