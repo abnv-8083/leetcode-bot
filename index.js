@@ -137,14 +137,29 @@ client.on('ready', async () => {
                 const doneKeywords = ['done', 'completed', 'finished', '👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿'];
                 
                 if (doneKeywords.some(kw => text.includes(kw))) {
-                    const userId = msg.fromMe ? client.info.wid._serialized : msg.author;
+                    const idsToMark = [];
+                    if (msg.fromMe) {
+                        idsToMark.push(client.info.wid._serialized);
+                    } else {
+                        if (msg.author) idsToMark.push(msg.author);
+                        try {
+                            const contact = await msg.getContact();
+                            if (contact && contact.id && contact.id._serialized) {
+                                idsToMark.push(contact.id._serialized);
+                            }
+                        } catch (err) {}
+                    }
 
-                    if (userId) {
-                        const isNew = markUserDone(userId);
-                        if (isNew) {
-                            console.log(`✅ Marked user ${userId} as done.`);
-                            await msg.react('✅');
+                    let isNew = false;
+                    for (let id of idsToMark) {
+                        if (markUserDone(id)) {
+                            isNew = true;
                         }
+                    }
+
+                    if (isNew) {
+                        console.log(`✅ Marked user as done (${idsToMark.join(', ')}).`);
+                        await msg.react('✅');
                     }
                 }
 
